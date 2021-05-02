@@ -1,55 +1,65 @@
-#import "ViewController.h"
+#import "Renderer.h"
+
+// These structures must be shader/copied directly in the Metal shader library
+struct VertexShaderData
+{
+	matrix_float4x4 transform;
+	vector_float4 color;
+	void loadColor(double r, double g, double b, double a) { color.r = r; color.g = g; color.b = b; color.a = a; }
+};
 
 
-@interface ViewController ()<MTKViewDelegate>
+// These structures must be shader/copied directly in the Metal shader library
+struct Vertex
+{
+	vector_float4 position;
+	vector_float4 color;
+	vector_float2 uv;
+	void loadPoint(double x, double y) { position.x = x; position.y = y; position.z = 0.0; position.w = 1.0;  }
+	void loadColor(double r, double g, double b, double a) { color.r = r; color.g = g; color.b = b; color.a = a; }
+};
+
+
+@interface Renderer()
 {
 	id<MTLCommandQueue> commandQueue;
 	id<MTLTexture> mtlTexture;
+	id<MTLDevice> metalDevice;
 }
-
 @end
 
 
-@implementation ViewController
+@implementation Renderer
 
 
-- (void)viewDidLoad
+- (id)initWithDevice:(id<MTLDevice>) metalDevice_
 {
-	[super viewDidLoad];
+	self = [super init];
+	if (self)
+	{
+		metalDevice = metalDevice_;
+		commandQueue = [metalDevice newCommandQueue];
+		[self loadTexture];
+	}
 	
-	self.metalView.device = self.metalView.preferredDevice;
-	self.metalView.delegate = self;
-	
-	NSLog(@"MetalDevice: %@", [self.metalView.device description]);
-
-
-	commandQueue = [self.metalView.device newCommandQueue];
-	[self loadTexture];
-	
-	UISegmentedControl  * segment = [[UISegmentedControl alloc] initWithItems:@[@"1", @"2", @"3"]];
-	segment.frame = CGRectMake(10.0, 40.0, 640.0, 120.0);
-	[self.view addSubview:segment];
+	return self;
 }
 
 
--(void) viewDidLayoutSubviews
-{
-	[super viewDidLayoutSubviews];
-	self.metalView.frame = CGRectMake(0.0, 0.0, CGRectGetHeight(self.view.bounds), CGRectGetWidth(self.view.bounds) - 196);
-}
-
-
--(void) loadTexture
+- (void)loadTexture
 {
 	UIImage * image = [UIImage imageNamed:@"texture.png"];
-	MTKTextureLoader * textureLoader = [[MTKTextureLoader alloc] initWithDevice:self.metalView.device];
-	mtlTexture = [textureLoader newTextureWithCGImage:image.CGImage options:@{MTKTextureLoaderOptionOrigin:MTKTextureLoaderOriginFlippedVertically} error:nil];
+	MTKTextureLoader * textureLoader = [[MTKTextureLoader alloc] initWithDevice:metalDevice];
+	
+	// Texture is upside down
+	NSDictionary * options = @{MTKTextureLoaderOptionOrigin:MTKTextureLoaderOriginFlippedVertically};
+	mtlTexture = [textureLoader newTextureWithCGImage:image.CGImage options:options error:nil];
 }
 
 
-- (void)drawInMTKView:(MTKView *)view
+- (void)renderIntoView:(MTKView*) metalView
 {
-	MTLRenderPassDescriptor * renderPassDescriptor = self.metalView.currentRenderPassDescriptor;
+	MTLRenderPassDescriptor * renderPassDescriptor = metalView.currentRenderPassDescriptor;
 	if (renderPassDescriptor == nil)
 	{
 		return;
@@ -61,8 +71,7 @@
 	renderPassDescriptor.depthAttachment.clearDepth = 1.0;
 	renderPassDescriptor.depthAttachment.loadAction = MTLLoadActionLoad;
 
-	id<MTLDevice> metalDevice = self.metalView.device;
-	id<MTLTexture> drawableTexture =  self.metalView.currentDrawable.texture;
+	id<MTLTexture> drawableTexture =  metalView.currentDrawable.texture;
 	id<MTLCommandBuffer> commandBuffer = [commandQueue commandBuffer];
 	id<MTLRenderCommandEncoder> commandEncoder = [commandBuffer renderCommandEncoderWithDescriptor:renderPassDescriptor];
 
@@ -121,7 +130,7 @@
 	pipelineStateDescriptor.vertexFunction = vertexFunction;
 	pipelineStateDescriptor.fragmentFunction = fragmentFunctionColor;
 	pipelineStateDescriptor.colorAttachments[0].blendingEnabled = YES;
-	pipelineStateDescriptor.colorAttachments[0].pixelFormat = self.metalView.colorPixelFormat;
+	pipelineStateDescriptor.colorAttachments[0].pixelFormat = metalView.colorPixelFormat;
 	pipelineStateDescriptor.depthAttachmentPixelFormat = MTLPixelFormatDepth32Float;
 	pipelineStateDescriptor.colorAttachments[0].blendingEnabled = YES;
 
@@ -138,7 +147,7 @@
 	pipelineStateDescriptor2.vertexFunction = vertexFunction;
 	pipelineStateDescriptor2.fragmentFunction = fragmentFunctionTexture;
 	pipelineStateDescriptor2.colorAttachments[0].blendingEnabled = YES;
-	pipelineStateDescriptor2.colorAttachments[0].pixelFormat = self.metalView.colorPixelFormat;
+	pipelineStateDescriptor2.colorAttachments[0].pixelFormat = metalView.colorPixelFormat;
 	pipelineStateDescriptor2.depthAttachmentPixelFormat = MTLPixelFormatDepth32Float;
 	pipelineStateDescriptor2.colorAttachments[0].blendingEnabled = YES;
 
@@ -191,17 +200,12 @@
 
 	[commandEncoder endEncoding];
 	commandEncoder = nil;
-	[commandBuffer presentDrawable:self.metalView.currentDrawable];
+	[commandBuffer presentDrawable:metalView.currentDrawable];
 	
 	[commandBuffer commit];
 	[commandBuffer waitUntilCompleted];
 	commandBuffer = nil;
 }
-
-- (void)mtkView:(nonnull MTKView *)view drawableSizeWillChange:(CGSize)size {
-}
-
-
 
 
 @end
