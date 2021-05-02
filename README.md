@@ -20,8 +20,8 @@ Using `MTLCreateSystemDefaultDevice` seems to cause screen blanking on newer 16"
 
 Clearing with red background and drawing two colored quads and two texture quads taking up whole screen can be done on:
 |Device|FPS   |
-+------+------+
+|------|------|
 |Macbook Pro 15" (2014)|
-+------+------+
+|------|------|
 
  
