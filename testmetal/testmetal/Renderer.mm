@@ -186,7 +186,13 @@ struct Vertex
 	}
 	
 	id<MTLTexture> drawable = metalView.currentDrawable.texture;
-	//NSLog(@"Current drawable: %d %d\n", [drawable width], [drawable height]);
+	NSLog(@"Current drawable: %d %d\n", [drawable width], [drawable height]);
+	NSLog(@"Drawable size: %f / %f %f view size: %fx%f\n",
+		  metalView.contentScaleFactor,
+		  metalView.drawableSize.width,
+		  metalView.drawableSize.height,
+		  CGRectGetWidth(metalView.bounds),
+		  CGRectGetHeight(metalView.bounds));
 
 	renderPassDescriptor.colorAttachments[0].storeAction = MTLStoreActionStore;
 	renderPassDescriptor.colorAttachments[0].loadAction = MTLLoadActionClear;
