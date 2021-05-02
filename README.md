@@ -16,6 +16,12 @@ Using `self.metalView.preferredDevice;` as MTLDevice seems to default to the int
 
 Using `MTLCreateSystemDefaultDevice` seems to cause screen blanking on newer 16" Macbook Pros when first creating the device. Seemingly because the AMD GPU is being used as default device instead of the integrated GPU integrated Intel UHD Graphics 630) -- I havent' seen this on other devices (older Macbook Pros). 
 
-### Benchmarking
+### Benchmarking/Findings
+
+Clearing with red background and drawing two colored quads and two texture quads taking up whole screen can be done on:
+|Device|FPS   |
++------+------+
+|Macbook Pro 15" (2014)|
++------+------+
 
  

@@ -5,11 +5,9 @@ struct VertexShaderData
 {
 	matrix_float4x4 transform;
 	vector_float4 color;
-	void loadColor(double r, double g, double b, double a) { color.r = r; color.g = g; color.b = b; color.a = a; }
 };
 
 
-// These structures must be shader/copied directly in the Metal shader library
 struct Vertex
 {
 	vector_float4 position;
@@ -25,6 +23,10 @@ struct Vertex
 	id<MTLCommandQueue> commandQueue;
 	id<MTLTexture> mtlTexture;
 	id<MTLDevice> metalDevice;
+	
+	id<MTLFunction> vertexShader;
+	id<MTLFunction> fragmentShaderColor;
+	id<MTLFunction> fragmentShaderTexture;
 }
 @end
 
@@ -40,6 +42,7 @@ struct Vertex
 		metalDevice = metalDevice_;
 		commandQueue = [metalDevice newCommandQueue];
 		[self loadTexture];
+		[self setupShadersPrecompile];
 	}
 	
 	return self;
@@ -57,78 +60,58 @@ struct Vertex
 }
 
 
-- (void)renderIntoView:(MTKView*) metalView
+- (void)setupShadersPrecompile
 {
-	MTLRenderPassDescriptor * renderPassDescriptor = metalView.currentRenderPassDescriptor;
-	if (renderPassDescriptor == nil)
-	{
-		return;
-	}
-
-	renderPassDescriptor.colorAttachments[0].storeAction = MTLStoreActionStore;
-	renderPassDescriptor.colorAttachments[0].loadAction = MTLLoadActionClear;
-	renderPassDescriptor.colorAttachments[0].clearColor =  MTLClearColorMake(1.0, 0.0, 0.0, 1.0);
-	renderPassDescriptor.depthAttachment.clearDepth = 1.0;
-	renderPassDescriptor.depthAttachment.loadAction = MTLLoadActionLoad;
-
-	id<MTLTexture> drawableTexture =  metalView.currentDrawable.texture;
-	id<MTLCommandBuffer> commandBuffer = [commandQueue commandBuffer];
-	id<MTLRenderCommandEncoder> commandEncoder = [commandBuffer renderCommandEncoderWithDescriptor:renderPassDescriptor];
-
-
-	static int tick = 0;
-	tick ++;
-	double sin_tick(sin((double)tick/10.0));
-	double xScale = 1.0, yScale = 1.0, xOffset = 0.1*sin_tick, yOffset = 0.1*sin_tick;
-	NSLog(@"Tick is: %d %f %f", tick, xOffset, yOffset);
-	matrix_float4x4 transform = matrix_float4x4{ {
-		{ (float)xScale, (float)0.0, (float)0.0, (float)0.0},     // each line here provides column data
-		{ (float)0.0, (float)yScale, (float)0.0, (float)0.0},
-		{ (float)0.0, (float)0.0, (float)1.0, (float)0.0 },
-		{ (float)xOffset, (float)yOffset, (float)0.0, (float)1.0 } }
-	};
-
-	Vertex vertices[18];
-	vertices[0].loadPoint(-1.0, -1.0);
-	vertices[1].loadPoint(1.0, -1.0);
-	vertices[2].loadPoint(-1.0, 1.0);
-	vertices[3].loadPoint(1.0, -1.0);
-	vertices[4].loadPoint(1.0, 1.0);
-	vertices[5].loadPoint(-1.0, 1.0);
-	
-	vertices[6].loadPoint(-0.8, -0.8);
-	vertices[7].loadPoint(1.2, -0.8);
-	vertices[8].loadPoint(-0.8, 1.2);
-	vertices[9].loadPoint(1.2, -0.8);
-	vertices[10].loadPoint(1.2, 1.2);
-	vertices[11].loadPoint(-0.8, 1.2);
-
-	vertices[12].loadPoint(-1.2, -1.2);
-	vertices[13].loadPoint(0.8, -1.2);
-	vertices[14].loadPoint(-1.2, 0.8);
-	vertices[15].loadPoint(0.8, -1.2);
-	vertices[16].loadPoint(0.8, 0.8);
-	vertices[17].loadPoint(-1.2, 0.8);
-
-	vertices[12].uv = {0.0, 0.0};
-	vertices[13].uv = {1.0, 0.0};
-	vertices[14].uv = {0.0, 1.0};
-	vertices[15].uv = {1.0, 0.0};
-	vertices[16].uv = {1.0, 1.0};
-	vertices[17].uv = {0.0, 1.0};
-
-	
-
+	// defaultShaderLibrary refer to the compile shaders in SimpleShaders.metal
 	id<MTLLibrary> defaultShaderLibrary = [metalDevice newDefaultLibrary];
-	id<MTLFunction> vertexFunction = [defaultShaderLibrary newFunctionWithName:@"vertexShader"];
-	id<MTLFunction> fragmentFunctionColor = [defaultShaderLibrary newFunctionWithName:@"fragmentShaderColor"];
-	id<MTLFunction> fragmentFunctionTexture = [defaultShaderLibrary newFunctionWithName:@"fragmentShaderTexture"];
+	vertexShader = [defaultShaderLibrary newFunctionWithName:@"vertexShader"];
+	fragmentShaderColor = [defaultShaderLibrary newFunctionWithName:@"fragmentShaderColor"];
+	fragmentShaderTexture = [defaultShaderLibrary newFunctionWithName:@"fragmentShaderTexture"];
+}
 
+
+- (matrix_float4x4)transformForXScale:(double)xScale xOffset:(double) xOffset yScale:(double)yScale yOffset:(double)yOffset
+{
+	matrix_float4x4 transform = matrix_float4x4{ {
+		{ (float)xScale, 0.0f, 0.0f, 0.0f},     // each line here provides column data
+		{ 0.0f, (float)yScale, 0.0f, 0.0f},
+		{ 0.0f, 0.0f, 1.0f, 0.0f },
+		{ (float)xOffset, (float)yOffset, 0.0f, 1.0f } }
+	};
+	
+	return transform;
+}
+
+
+-(void) loadQuadIntoVertices:(Vertex*) targetVertices
+{
+	// This could have been triangle strip
+	// Triangle 1
+	targetVertices[0].loadPoint(-1.0, -1.0);
+	targetVertices[1].loadPoint( 1.0, -1.0);
+	targetVertices[2].loadPoint(-1.0,  1.0);
+	// Triangle 2
+	targetVertices[3].loadPoint( 1.0, -1.0);
+	targetVertices[4].loadPoint( 1.0,  1.0);
+	targetVertices[5].loadPoint(-1.0,  1.0);
+
+	targetVertices[0].uv = {0.0, 0.0};
+	targetVertices[1].uv = {1.0, 0.0};
+	targetVertices[2].uv = {0.0, 1.0};
+	
+	targetVertices[3].uv = {1.0, 0.0};
+	targetVertices[4].uv = {1.0, 1.0};
+	targetVertices[5].uv = {0.0, 1.0};
+}
+
+
+-(id<MTLRenderPipelineState>) getPipeLineStateForView:(MTKView*) metalView withVertexShader:(id<MTLFunction>) vertexShader andFragmentShader:(id<MTLFunction>) fragmentShader
+{
 	// Configure a pipeline descriptor that is used to create a pipeline state.
 	MTLRenderPipelineDescriptor *pipelineStateDescriptor = [[MTLRenderPipelineDescriptor alloc] init];
 	pipelineStateDescriptor.label = @"Simple Pipeline";
-	pipelineStateDescriptor.vertexFunction = vertexFunction;
-	pipelineStateDescriptor.fragmentFunction = fragmentFunctionColor;
+	pipelineStateDescriptor.vertexFunction = vertexShader;
+	pipelineStateDescriptor.fragmentFunction = fragmentShader;
 	pipelineStateDescriptor.colorAttachments[0].blendingEnabled = YES;
 	pipelineStateDescriptor.colorAttachments[0].pixelFormat = metalView.colorPixelFormat;
 	pipelineStateDescriptor.depthAttachmentPixelFormat = MTLPixelFormatDepth32Float;
@@ -141,63 +124,105 @@ struct Vertex
 	pipelineStateDescriptor.colorAttachments[0].destinationRGBBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
 	pipelineStateDescriptor.colorAttachments[0].destinationAlphaBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
 
-	// Configure a pipeline descriptor that is used to create a pipeline state.
-	MTLRenderPipelineDescriptor *pipelineStateDescriptor2 = [[MTLRenderPipelineDescriptor alloc] init];
-	pipelineStateDescriptor2.label = @"Simple Pipeline2";
-	pipelineStateDescriptor2.vertexFunction = vertexFunction;
-	pipelineStateDescriptor2.fragmentFunction = fragmentFunctionTexture;
-	pipelineStateDescriptor2.colorAttachments[0].blendingEnabled = YES;
-	pipelineStateDescriptor2.colorAttachments[0].pixelFormat = metalView.colorPixelFormat;
-	pipelineStateDescriptor2.depthAttachmentPixelFormat = MTLPixelFormatDepth32Float;
-	pipelineStateDescriptor2.colorAttachments[0].blendingEnabled = YES;
-
-	pipelineStateDescriptor2.colorAttachments[0].rgbBlendOperation = MTLBlendOperationAdd;
-	pipelineStateDescriptor2.colorAttachments[0].alphaBlendOperation = MTLBlendOperationAdd;
-	pipelineStateDescriptor2.colorAttachments[0].sourceRGBBlendFactor = MTLBlendFactorSourceAlpha;
-	pipelineStateDescriptor2.colorAttachments[0].sourceAlphaBlendFactor = MTLBlendFactorSourceAlpha;
-	pipelineStateDescriptor2.colorAttachments[0].destinationRGBBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
-	pipelineStateDescriptor2.colorAttachments[0].destinationAlphaBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
-
-	
-	
 	NSError * error = nil;
 	id<MTLRenderPipelineState> pipelineState = [metalDevice newRenderPipelineStateWithDescriptor:pipelineStateDescriptor error:&error];
-	[commandEncoder setRenderPipelineState:pipelineState];
+	
+	return pipelineState;
+}
+
+
+-(id<MTLBuffer>) vertexBufferForQuad
+{
+	// Create a quad and return vertex buffer to it
+	Vertex vertices[6];
+	[self loadQuadIntoVertices:vertices];
 	id<MTLBuffer> vertexBuffer = [metalDevice newBufferWithBytes:vertices length:6*sizeof(Vertex) options:MTLResourceStorageModeShared];
+	
+	return vertexBuffer;
+}
+
+
+-(void) drawQuadIntoEncoder:(id<MTLRenderCommandEncoder>) commandEncoder
+				  inView:(MTKView*) metalView
+		   withTransform:(matrix_float4x4) transform
+				   color:(vector_float4) color
+			  andTexture:(id<MTLTexture>) optionalTexture
+{
+	// Add drawPrimitives of quad to commandEncoder
+	VertexShaderData shaderData;
+	shaderData.transform = transform;
+	shaderData.color = color;
+	
+	id<MTLBuffer> vertexBuffer = [self vertexBufferForQuad];
+	id<MTLFunction> fragmentShader = optionalTexture!=nil ? fragmentShaderTexture : fragmentShaderColor;
+	id<MTLRenderPipelineState> pipelineState = [self getPipeLineStateForView:metalView withVertexShader:vertexShader andFragmentShader:fragmentShader];
+
+	// Set general shader data for the shaders
+	[commandEncoder setFragmentBytes:&shaderData length:sizeof(shaderData) atIndex:1];
+	[commandEncoder setVertexBytes:&shaderData length:sizeof(shaderData) atIndex:1];
+
+	// Set vertex data for drawing
 	[commandEncoder setVertexBuffer:vertexBuffer offset:0 atIndex:0];
-	VertexShaderData shaderData1;
-	shaderData1.transform = transform;
-	shaderData1.loadColor(0.0, 1.0, 1.0, 0.5);
-	[commandEncoder setFragmentBytes:&shaderData1 length:sizeof(shaderData1) atIndex:1];
-	[commandEncoder setVertexBytes:&shaderData1 length:sizeof(shaderData1) atIndex:1];
 
+	// Set pipeline
+	[commandEncoder setRenderPipelineState:pipelineState];
+	
+	// Set texture
+	[commandEncoder setFragmentTexture:optionalTexture atIndex:1];
+
+	// Draw as two triangles (could also be "MTLPrimitiveTypeTriangleStrip")
 	[commandEncoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6];
-
-	vertexBuffer = [metalDevice newBufferWithBytes:&vertices[6] length:6*sizeof(Vertex) options:MTLResourceStorageModeShared];
-	[commandEncoder setVertexBuffer:vertexBuffer offset:0 atIndex:0];
-	VertexShaderData shaderData2;
-	shaderData2.transform = transform;
-	shaderData2.loadColor(1.0, 1.0, 0.0, 0.5);
-	[commandEncoder setFragmentBytes:&shaderData2 length:sizeof(shaderData2) atIndex:1];
-	[commandEncoder setVertexBytes:&shaderData2 length:sizeof(shaderData2) atIndex:1];
-
-	[commandEncoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6];
-
-	vertexBuffer = [metalDevice newBufferWithBytes:&vertices[12] length:6*sizeof(Vertex) options:MTLResourceStorageModeShared];
-	[commandEncoder setVertexBuffer:vertexBuffer offset:0 atIndex:0];
-	VertexShaderData shaderData3;
-	shaderData3.transform = transform;
-	shaderData3.loadColor(1.0, 0.0, 1.0, 0.5);
-	id<MTLRenderPipelineState> pipelineState2 = [metalDevice newRenderPipelineStateWithDescriptor:pipelineStateDescriptor2 error:&error];
-	[commandEncoder setRenderPipelineState:pipelineState2];
-	[commandEncoder setFragmentBytes:&shaderData3 length:sizeof(shaderData3) atIndex:1];
-	[commandEncoder setVertexBytes:&shaderData3 length:sizeof(shaderData3) atIndex:1];
-	[commandEncoder setFragmentTexture:mtlTexture atIndex:1];
-	[commandEncoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6];
-
-	//shaderData.transform = toFloat4x4Matrix(transform);
+}
 
 
+- (void)renderIntoView:(MTKView*) metalView
+{
+	MTLRenderPassDescriptor * renderPassDescriptor = metalView.currentRenderPassDescriptor;
+	if (renderPassDescriptor == nil)
+	{
+		return;
+	}
+
+	renderPassDescriptor.colorAttachments[0].storeAction = MTLStoreActionStore;
+	renderPassDescriptor.colorAttachments[0].loadAction = MTLLoadActionClear;
+	renderPassDescriptor.colorAttachments[0].clearColor =  MTLClearColorMake(1.0, 0.0, 0.0, 1.0); // Clear background with red
+	renderPassDescriptor.depthAttachment.clearDepth = 1.0;
+	renderPassDescriptor.depthAttachment.loadAction = MTLLoadActionLoad;
+
+	id<MTLCommandBuffer> commandBuffer = [commandQueue commandBuffer];
+	id<MTLRenderCommandEncoder> commandEncoder = [commandBuffer renderCommandEncoderWithDescriptor:renderPassDescriptor];
+
+	static int tick = 0;
+	tick ++;
+	double sin_tick(sin((double)tick/10.0));
+	double xScale = 1.25+0.25*sin_tick, yScale = 1.25+0.25*sin_tick;
+	double xOffset = 0.1*sin_tick, yOffset = 0.1*sin_tick;
+
+	[self drawQuadIntoEncoder:commandEncoder
+					  inView:metalView
+			   withTransform:[self transformForXScale:xScale xOffset:xOffset yScale:yScale yOffset:yOffset]
+						color:vector_float4{0.0f, 1.0f, 1.0f, 0.5f}
+				   andTexture:nil];
+
+	[self drawQuadIntoEncoder:commandEncoder
+					  inView:metalView
+			   withTransform:[self transformForXScale:xScale xOffset:xOffset-0.1 yScale:yScale yOffset:yOffset-0.1]
+						color:vector_float4{1.0f, 1.0f, 0.0f, 0.5f}
+				   andTexture:nil];
+
+	[self drawQuadIntoEncoder:commandEncoder
+					  inView:metalView
+			   withTransform:[self transformForXScale:xScale xOffset:xOffset+0.1 yScale:yScale yOffset:yOffset-0.1]
+						color:vector_float4{0.0, 0.0f, 1.0f, 0.5f}
+				   andTexture:mtlTexture];
+	
+	[self drawQuadIntoEncoder:commandEncoder
+					  inView:metalView
+			   withTransform:[self transformForXScale:xScale xOffset:xOffset-0.1 yScale:yScale yOffset:yOffset+0.1]
+						color:vector_float4{1.0, 0.0f, 1.0f, 0.5f}
+				   andTexture:mtlTexture];
+
+	
 	[commandEncoder endEncoding];
 	commandEncoder = nil;
 	[commandBuffer presentDrawable:metalView.currentDrawable];
