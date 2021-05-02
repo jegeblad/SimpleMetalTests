@@ -28,13 +28,13 @@ First test (git tag:first_test). MetalView set to 60 fps. preferred rate. We are
 • Second texture&colored quad (alpha blended)
 
 |Device|FPS   | Pixels per screen | Approximate rendered pixels/frame | Approximate pixels/sec. | 
-|------|------|
+|------|------|------|------|------|
 |Macbook Air 11" (2015)| 60| 1,049,088 (Internal) | 5*1,049,088 | 314,726,400 |
 |Macbook Air 11" (2015)| 60| 3,686,400 (External) | 5*3,686,400 | 1,105,920,000 |
 |Macbook Pro 15" (2014)| 38| 9,216,000 (Internal) |  5*9,216,000 | 1,751,040,000 |
 |Macbook Pro 15" (2014)| 60| 3,686,400 (External) |  5*3,686,400 | 1,105,920,000 |
 |Macbook Pro 16" (2019)| 60| 13,525,680 (Internal) |  5*13,525,680 | 4,057,704,000 |
-|------|------|
+|------|------|------|------|------|
 
 ### On Macbook Air 11" 2015 (Big Sur - Interface optimized for Mac)
 No issues encountered. We max out at 60 FPS on both internal and external displays.
