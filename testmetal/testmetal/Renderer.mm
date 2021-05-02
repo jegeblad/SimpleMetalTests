@@ -40,6 +40,8 @@ struct Vertex
 	if (self)
 	{
 		metalDevice = metalDevice_;
+		NSLog(@"Using device %@", [metalDevice description]);
+		
 		commandQueue = [metalDevice newCommandQueue];
 		[self loadTexture];
 		[self setupShadersPrecompile];
@@ -182,6 +184,9 @@ struct Vertex
 	{
 		return;
 	}
+	
+	id<MTLTexture> drawable = metalView.currentDrawable.texture;
+	//NSLog(@"Current drawable: %d %d\n", [drawable width], [drawable height]);
 
 	renderPassDescriptor.colorAttachments[0].storeAction = MTLStoreActionStore;
 	renderPassDescriptor.colorAttachments[0].loadAction = MTLLoadActionClear;
